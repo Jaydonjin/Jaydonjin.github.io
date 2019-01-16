@@ -104,7 +104,9 @@
 <meta property="og:description" content="最近团队组织周会分享，上周有同学分享了TCP协议中的握手和挥手，正好借着话题又自己整理了一番，以此文作为记录小结。先放出一张一次TCP连接完整时序图，包括建立连接，传输数据，断开连接">
 <meta property="og:locale" content="zh-Hans">
 <meta property="og:image" content="http://yoursite.com/2019/01/15/tcp的握手与挥手/TCP.png">
-<meta property="og:updated_time" content="2019-01-15T10:26:39.483Z">
+<meta property="og:image" content="http://yoursite.com/2019/01/15/tcp的握手与挥手/post.png">
+<meta property="og:image" content="http://yoursite.com/2019/01/15/tcp的握手与挥手/post1.png">
+<meta property="og:updated_time" content="2019-01-16T06:37:46.557Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="TCP的握手与挥手">
 <meta name="twitter:description" content="最近团队组织周会分享，上周有同学分享了TCP协议中的握手和挥手，正好借着话题又自己整理了一番，以此文作为记录小结。先放出一张一次TCP连接完整时序图，包括建立连接，传输数据，断开连接">
@@ -354,7 +356,7 @@
                   <span class="post-meta-item-text">字数统计&#58;</span>
                 
                 <span title="字数统计">
-                  477
+                  1.2k
                 </span>
               
 
@@ -370,7 +372,7 @@
                   <span class="post-meta-item-text">阅读时长 &asymp;</span>
                 
                 <span title="阅读时长">
-                  1
+                  4
                 </span>
               
             </div>
@@ -408,6 +410,21 @@
 <li>服务端数据传输完成后主动发送<strong>FIN</strong>报文，此时服务端状态为<strong>LAST_ACK</strong></li>
 <li>客户端收到服务端的FIN报文后反馈发送<strong>ACK</strong>报文，此时客户端状态为<strong>TIME_WAIT</strong></li>
 </ol>
+<h1 id="几个问题"><a href="#几个问题" class="headerlink" title="几个问题"></a>几个问题</h1><hr>
+<p>建立连接需要三次握手比较好理解，关于四次挥手的一些疑问。</p>
+<h2 id="为什么断开连接需要四次挥手？"><a href="#为什么断开连接需要四次挥手？" class="headerlink" title="为什么断开连接需要四次挥手？"></a>为什么断开连接需要四次挥手？</h2><hr>
+<h3 id="保证TCP协议的全双工连接能够可靠关闭"><a href="#保证TCP协议的全双工连接能够可靠关闭" class="headerlink" title="保证TCP协议的全双工连接能够可靠关闭"></a>保证TCP协议的全双工连接能够<strong>可靠</strong>关闭</h3><p>如果客户端在收到服务端的FIN报文后直接CLOSED，那么由于网络等原因导致服务端没有收到客户端最后回复的ACK.那么服务端在超时之后继续发送FIN，此时客户端已经CLOSED，找不多对应的连接，最后服务端就会收到RET。虽然不会造成数据丢失，但是却不符合可靠连接的要求。所有客户端不能直接进入CLOSED，而要保持TIME_WAIT,当再次收到重试的FIN时，能够保证对方收到ACK，最后正确的关闭连接。</p>
+<h3 id="保证这次连接的重复数据段从网络中消失"><a href="#保证这次连接的重复数据段从网络中消失" class="headerlink" title="保证这次连接的重复数据段从网络中消失"></a>保证这次连接的重复数据段从网络中消失</h3><p>如果客户端直接CLOSED，然后再想服务端发起新的请求，如果新连接和老连接的端口号相同，并且前一次的某些数据还仍然滞留在网络中，这些延迟数据在新的连接建立完成之后才达到服务端,这样就和真正的新连接的数据发生混淆了。所以TCP连接还要在TIME_WAIT状态等待2倍MSL，这样可以保证本次连接的所有数据都从网络中消失。</p>
+<h2 id="客户端TIME-WAIT为什么要等待2MSL"><a href="#客户端TIME-WAIT为什么要等待2MSL" class="headerlink" title="客户端TIME_WAIT为什么要等待2MSL?"></a>客户端TIME_WAIT为什么要等待2MSL?</h2><h3 id="保证滞留数据最大程度从网络中消失"><a href="#保证滞留数据最大程度从网络中消失" class="headerlink" title="保证滞留数据最大程度从网络中消失"></a>保证滞留数据最大程度从网络中消失</h3><p>为什么是最大程度呢？按理说只需要等待两个MSL时间没有收到任何新的包，那么最后两个报文就从网络中消失了。其实不然，之前提到的如果服务端没有收到客户端的ACK,再重试继续发送FIN，不难理解这时新的最后两个包的最大存活时间理论上可以超出TIME_WAIT计时起的2MSL，因为2MSL是从第一次说到服务端的FIN开始计时的。</p>
+<h1 id="补充一个最近遇到的小知识点"><a href="#补充一个最近遇到的小知识点" class="headerlink" title="补充一个最近遇到的小知识点"></a>补充一个最近遇到的小知识点</h1><p>问题如图，使用curl命令发送post http请求会收到一个状态码为100，内容是‘continue’的response<br><img src="/2019/01/15/tcp的握手与挥手/post.png" class="[class names]"><br>在查阅了相关资料整理了一下大致的原因，这是<strong>libcurl</strong>类库的行为，具体RFC相关描述：<a href="[https://www.w3.org/Protocols/rfc2616/rfc2616-sec8.html#sec8.2.3]" title="https://www.w3.org/Protocols/rfc2616/rfc2616-sec8.html#sec8.2.3">RFC</a><br>在基于libcurl的库都有一样的行为，当要POST的数据大于1024字节，curllib并不会直接发起POST请求，而是分为两步</p>
+<blockquote>
+<ol>
+<li>发送一个请求, 包含一个Expect:100-continue, 询问Server使用愿意接受数据  </li>
+<li>接收到Server返回的100-continue应答以后, 才把数据POST给Server  </li>
+</ol>
+</blockquote>
+<img src="/2019/01/15/tcp的握手与挥手/post1.png" class="[class names]">
+<p>这会导致一个问题，并不是所用server都能正确应答100-continue，比如lightttpd,就会返回417 “Expectation Failed”, 则会造成逻辑出错。<br>要解决的办法挺简单，在request header里<strong>禁用Expect</strong></p>
 
       
     </div>
@@ -611,7 +628,7 @@
             
 
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#建立连接的三次握手"><span class="nav-number">1.</span> <span class="nav-text">建立连接的三次握手</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#为什么建立连接需要三次握手，两次或者四次不行吗？"><span class="nav-number">1.1.</span> <span class="nav-text">为什么建立连接需要三次握手，两次或者四次不行吗？</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#断开连接的四次挥手"><span class="nav-number">2.</span> <span class="nav-text">断开连接的四次挥手</span></a></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#建立连接的三次握手"><span class="nav-number">1.</span> <span class="nav-text">建立连接的三次握手</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#为什么建立连接需要三次握手，两次或者四次不行吗？"><span class="nav-number">1.1.</span> <span class="nav-text">为什么建立连接需要三次握手，两次或者四次不行吗？</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#断开连接的四次挥手"><span class="nav-number">2.</span> <span class="nav-text">断开连接的四次挥手</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#几个问题"><span class="nav-number">3.</span> <span class="nav-text">几个问题</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#为什么断开连接需要四次挥手？"><span class="nav-number">3.1.</span> <span class="nav-text">为什么断开连接需要四次挥手？</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#保证TCP协议的全双工连接能够可靠关闭"><span class="nav-number">3.1.1.</span> <span class="nav-text">保证TCP协议的全双工连接能够可靠关闭</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#保证这次连接的重复数据段从网络中消失"><span class="nav-number">3.1.2.</span> <span class="nav-text">保证这次连接的重复数据段从网络中消失</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#客户端TIME-WAIT为什么要等待2MSL"><span class="nav-number">3.2.</span> <span class="nav-text">客户端TIME_WAIT为什么要等待2MSL?</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#保证滞留数据最大程度从网络中消失"><span class="nav-number">3.2.1.</span> <span class="nav-text">保证滞留数据最大程度从网络中消失</span></a></li></ol></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#补充一个最近遇到的小知识点"><span class="nav-number">4.</span> <span class="nav-text">补充一个最近遇到的小知识点</span></a></li></ol></div>
             
 
           </div>
@@ -649,7 +666,7 @@
       <span class="post-meta-item-text">Site words total count&#58;</span>
     
     <span title="Site words total count">
-      2.5k
+      3.2k
     </span>
   
 </div>
